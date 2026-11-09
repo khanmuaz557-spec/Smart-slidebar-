@@ -1,6 +1,7 @@
 {
-  "name": "Glassy Studio V7",
+  "name": "Crema Studio",
   "short_name": "Crema Studio",
+  "description": "Your studio workspace at a glance with offline PWA capabilities.",
   "start_url": "index.html",
   "display": "standalone",
   "background_color": "#b9a698",
