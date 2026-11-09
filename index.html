@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#b9a698">
-<!-- ম্যানিফেস্ট ফাইল লিংক সক্রিয় করা হলো -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <meta name="mobile-web-app-capable" content="yes">
@@ -135,6 +134,8 @@
   #msgForm input{flex:1;min-width:0;height:36px;border-radius:12px;padding:0 12px;background:var(--g-card);border:1px solid var(--g-brd);color:inherit;outline:0;font-size:14px}
   #msgForm input:focus{border-color:var(--g-accent)}
   .mini{margin-left:auto;font-size:11px;border:0;background:none;color:var(--g-accent);cursor:pointer;font-weight:600}
+  .import-bar{display:flex;gap:6px;padding:6px 10px;background:var(--g-card);border-bottom:1px solid var(--g-brd);font-size:11px}
+  .import-btn{flex:1;padding:4px 8px;border-radius:8px;background:var(--g-hover);border:0;color:inherit;cursor:pointer;font-weight:600;display:flex;align-items:center;justify-content:center;gap:4px}
   @media(max-width:700px){#msgs,#bar.exp~#msgs{left:16px;right:16px;width:auto;top:auto;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateY(12px);max-height:60dvh;z-index:30}#msgs.open{transform:none}}
   #phone{position:fixed;top:50%;left:calc(max(16px,env(safe-area-inset-left)) + 84px);width:330px;max-height:min(600px,calc(100dvh - 32px));display:flex;flex-direction:column;
     transform:translate(-12px,-50%) scale(.96);opacity:0;pointer-events:none;background:var(--g-bg);border:1px solid var(--g-brd);border-radius:24px;color:var(--g-text);z-index:16;
@@ -218,7 +219,18 @@
 </aside>
 
 <section id="msgs" aria-label="Messages preview">
-  <header><button id="msgBack" class="cbtn hide" aria-label="Back"><i data-lucide="chevron-left" class="w-4 h-4"></i></button><b id="msgTitle">Messages</b><button id="msgRead" class="mini">Mark all read</button><button id="msgClose" class="cbtn" aria-label="Close"><i data-lucide="x" class="w-4 h-4"></i></button></header>
+  <header>
+    <button id="msgBack" class="cbtn hide" aria-label="Back"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+    <b id="msgTitle">Messages</b>
+    <button id="msgRead" class="mini">Mark all read</button>
+    <button id="msgClose" class="cbtn" aria-label="Close"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </header>
+  <!-- কন্টাক্ট ও ডাটা ইম্পোর্ট বার -->
+  <div class="import-bar" id="importBar">
+    <button class="import-btn" id="btnImportContact"><i data-lucide="user-plus" class="w-3.5 h-3.5"></i> Contacts</button>
+    <button class="import-btn" id="btnImportJson"><i data-lucide="file-up" class="w-3.5 h-3.5"></i> Backup File</button>
+    <input type="file" id="jsonInput" accept=".json,.txt" class="hide">
+  </div>
   <div id="msgBody"></div>
   <div id="typing" class="pout hide" style="padding:0 16px 6px"></div>
   <form id="msgForm" class="hide"><input id="msgIn" placeholder="Write a message…" autocomplete="off" aria-label="Message"><button class="cbtn play" aria-label="Send"><i data-lucide="send" class="w-4 h-4"></i></button></form>
@@ -313,29 +325,33 @@
   $('projList').addEventListener('click',e=>{const b=e.target.closest('.subrow');if(b){const p=projects[b.dataset.p];setView(p[0],p[2]+' open tasks')}});
 
   // ---- Messages ----
-  let convs=[
+  let savedConvs = store.get().customConvs;
+  let convs= savedConvs || [
     {id:1, n:'Maya Chen',c:'#f472b6',u:2,m:[['in','Can you review the new menu mockups?','9:41 AM'],['in','Also the roast-notes cards 🙂','9:42 AM']]},
     {id:2, n:'Studio Team',c:'#60a5fa',u:1,m:[['in','Standup moved to 11:00','8:55 AM']]},
     {id:3, n:'Leo Park',c:'#a78bfa',u:0,m:[['out','Sent the invoice over','Yesterday'],['in','Got it, thanks!','Yesterday']]}
   ];
+  
+  const saveCurrentConvs = () => store.set({customConvs: convs});
+
   const replies=['Sounds great!','On it 👍','Perfect, thanks!','Let me check and get back to you.'];
   let cur=null;
   const badges=()=>{const n=convs.reduce((a,c)=>a+c.u,0);[$('msgDot'),$('msgPill')].forEach(e=>{e.textContent=n;e.classList.toggle('hide',!n)})};
   const convBtn=(c,i)=>{const l=c.m[c.m.length-1];return `<button class="conv" data-i="${i}"><span class="av" style="background:${c.c}">${c.n[0]}</span><span class="cm"><b>${c.n}</b><span>${esc(l[1])}</span></span>${c.u?`<em class="ub">${c.u}</em>`:`<small>${l[2]}</small>`}</button>`};
   
   function renderList(){
-    cur=null;$('msgTitle').textContent='Messages';$('msgBack').classList.add('hide');$('msgForm').classList.add('hide');$('msgRead').classList.remove('hide');
+    cur=null;$('msgTitle').textContent='Messages';$('msgBack').classList.add('hide');$('msgForm').classList.add('hide');$('msgRead').classList.remove('hide');$('importBar').classList.remove('hide');
     $('msgBody').innerHTML=convs.map(convBtn).join('');
   }
   function renderThread(i){
-    cur=i;const c=convs[i];c.u=0;badges();$('msgTitle').textContent=c.n;$('msgBack').classList.remove('hide');$('msgForm').classList.remove('hide');$('msgRead').classList.add('hide');
+    cur=i;const c=convs[i];c.u=0;badges();$('msgTitle').textContent=c.n;$('msgBack').classList.remove('hide');$('msgForm').classList.remove('hide');$('msgRead').classList.add('hide');$('importBar').classList.add('hide');
     $('msgBody').innerHTML=c.m.map(m=>`<div class="bub ${m[0]}">${esc(m[1])}<small>${m[2]}</small></div>`).join('');$('msgBody').scrollTop=1e9;
   }
   const openPanel=o=>{if(o&&cur===null)renderList();$('msgs').classList.toggle('open',o)};
   $('msgBtn').addEventListener('click',()=>openPanel(!$('msgs').classList.contains('open')));
   $('msgClose').onclick=()=>openPanel(false);
   $('msgBack').onclick=renderList;
-  $('msgRead').onclick=()=>{convs.forEach(c=>{c.u=0;});badges();renderList()};
+  $('msgRead').onclick=()=>{convs.forEach(c=>{c.u=0;});badges();saveCurrentConvs();renderList()};
   $('msgBody').addEventListener('click',e=>{const b=e.target.closest('.conv');if(b)renderThread(+b.dataset.i)});
   
   function aiReply(i){
@@ -345,6 +361,7 @@
       const txt = replies[Math.floor(Math.random()*replies.length)];
       convs[i].m.push(['in', txt, now()]);
       $('typing').classList.add('hide');
+      saveCurrentConvs();
       if(cur===i) renderThread(i);
       else { convs[i].u++; badges(); }
     }, 1200);
@@ -352,10 +369,66 @@
 
   $('msgForm').addEventListener('submit',e=>{
     e.preventDefault();const t=$('msgIn').value.trim();if(!t||cur===null)return;const i=cur;
-    convs[i].m.push(['out',t,now()]);$('msgIn').value='';renderThread(i);
+    convs[i].m.push(['out',t,now()]);$('msgIn').value='';saveCurrentConvs();renderThread(i);
     aiReply(i);
   });
   badges();
+
+  // ---- Contact & Backup File Importers ----
+  const colors = ['#f472b6', '#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#f26a1b'];
+  
+  $('btnImportContact').onclick = async () => {
+    if ('contacts' in navigator && 'select' in navigator.contacts) {
+      try {
+        const selected = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+        if (selected && selected.length) {
+          selected.forEach(contact => {
+            const name = (contact.name && contact.name[0]) || (contact.tel && contact.tel[0]) || 'Unknown';
+            convs.unshift({
+              id: Date.now() + Math.random(),
+              n: name,
+              c: colors[Math.floor(Math.random()*colors.length)],
+              u: 0,
+              m: [['in', 'Hello from ' + name, now()]]
+            });
+          });
+          saveCurrentConvs();
+          badges();
+          renderList();
+        }
+      } catch (err) {
+        alert('Could not access contacts or permission denied.');
+      }
+    } else {
+      alert('Web Contacts Picker is not supported on this browser. Please use Backup File import instead.');
+    }
+  };
+
+  $('btnImportJson').onclick = () => $('jsonInput').click();
+  $('jsonInput').onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = JSON.parse(evt.target.result);
+        if (Array.isArray(data)) {
+          convs = data;
+        } else if (data.conversations && Array.isArray(data.conversations)) {
+          convs = data.conversations;
+        } else {
+          alert('Invalid file format. Please upload a valid JSON array.');
+          return;
+        }
+        saveCurrentConvs();
+        badges();
+        renderList();
+      } catch (err) {
+        alert('Failed to parse file.');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // ---- Navigation + persisted view ----
   const navs=[...document.querySelectorAll('.nav')];
@@ -443,4 +516,4 @@
   }
 </script>
 </body>
-</html>
+  </html>
